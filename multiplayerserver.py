@@ -42,23 +42,28 @@ class PongServer:
       threading.Thread(target=self.handle_client, args=(client_socket,)).start()
 
     def handle_client(self, client_socket):
-        try:
+        # try:
             while True:
                 data = client_socket.recv(1024)
                 if not data:
                     break
-                client_data = pickle.loads(data)
+                try:
+                    client_data = pickle.loads(data)
+                except Exception as e:
+                    print(f"Error deserializing client data: {e}")
+                    continue
                 print("receieved data from client")
                 # Update game state based on client data
                 self.update_game_state(client_data)
                 # Send updated game state to all clients
-                self.broadcast_game_state()
-        except Exception as e:
-            print(f"Error handling client: {e}")
-            self.connections.remove(client_data)
-        finally:
+                sender_profile = client_data.get("player_profile")
+                self.broadcast_game_state(sender_profile)
+        # except Exception as e:
+        #     print(f"Error handling client: {e}")
+        #     # self.connections.remove(client_data)
+        # finally:
             client_socket.close()
-            self.connections.remove(client_socket)
+        #     # self.connections.remove(client_socket)
 
     def update_game_state(self, client_data):
         # Update game state based on client data
@@ -73,10 +78,22 @@ class PongServer:
         self.game_state["player1_ready"] = client_data.get("player1_ready", self.game_state["player1_ready"])
         self.game_state["player2_ready"] = client_data.get("player2_ready", self.game_state["player2_ready"])
 
-    def broadcast_game_state(self):
+    def broadcast_game_state(self, sender_profile=None):
         serialized_data = pickle.dumps(self.game_state)
-        for connection in self.connections:
-            connection.send(serialized_data)
+        if sender_profile == "player1":
+            print("distributing to player 2...")
+            # send to player2
+            player1_connection = self.connections[1]
+            player1_connection.send(serialized_data)
+        elif sender_profile == "player2":
+            print("distributing to player 1...")
+            # send to player1
+            player2_connection = self.connections[0]
+            player2_connection.send(serialized_data)
+        else:
+            print("distributing to all players...")
+            for connection in self.connections:
+                connection.send(serialized_data)
 
 
 if __name__ == "__main__":
